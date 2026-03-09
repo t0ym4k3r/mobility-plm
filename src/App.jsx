@@ -544,6 +544,78 @@ export default function App() {
     }
   };
 
+  // ── Bulk product import ────────────────────────────────────────────────────
+  const handleProductsUpload = async (text) => {
+    const rows = parseCSV(text);
+    if (!rows) { showToast("Invalid CSV format", "error"); return; }
+
+    // Validate required columns
+    if (!rows[0].hasOwnProperty("name") || !rows[0].hasOwnProperty("category")) {
+      showToast("CSV must have 'name' and 'category' columns", "error"); return;
+    }
+
+    setSaving();
+    let added = 0, skipped = 0;
+    const newProds = [];
+    const newVd = {};
+
+    try {
+      for (const r of rows) {
+        const name = r.name?.trim();
+        if (!name) continue;
+
+        // Skip if product already exists
+        if (products.find(p => p.name.toLowerCase() === name.toLowerCase())) {
+          skipped++; continue;
+        }
+
+        // Map category — be forgiving of slight mismatches
+        const catRaw = r.category?.trim() || "";
+        const category = CATEGORIES.find(c =>
+          c.toLowerCase() === catRaw.toLowerCase() ||
+          c.toLowerCase().includes(catRaw.toLowerCase()) ||
+          catRaw.toLowerCase().includes(c.toLowerCase().split(" ")[0])
+        ) || CATEGORIES[0];
+
+        // Map stage
+        const stageRaw = r.stage?.trim() || "Maturity";
+        const stage = LIFECYCLE_STAGES.find(s =>
+          s.toLowerCase() === stageRaw.toLowerCase()
+        ) || "Maturity";
+
+        const asp = parseFloat(r.asp) || 0;
+        const bom = parseFloat(r.bom) || 0;
+
+        const inserted = await dbInsertProduct({ name, category, stage, asp, bom });
+
+        // Create empty vol_data rows for this product
+        const volRows = MONTHS.map((_, mi) => ({
+          product_id: inserted.id, month_index: mi, forecast: 0, actual: null,
+        }));
+        await dbUpsertVolBatch(volRows);
+
+        newProds.push(inserted);
+        newVd[inserted.id] = { forecast: Array(24).fill(0), actuals: Array(24).fill(null) };
+        added++;
+      }
+
+      // Update local state once with all new products
+      if (newProds.length) {
+        setProducts(prev => [...prev, ...newProds]);
+        setVolData(prev => ({ ...prev, ...newVd }));
+        setSelectedModels(prev => new Set([...prev, ...newProds.map(p => p.id)]));
+      }
+
+      setSaved();
+      const msg = skipped > 0
+        ? `Added ${added} models · ${skipped} skipped (already exist)`
+        : `Added ${added} models successfully`;
+      showToast(msg);
+    } catch (err) {
+      setSaveError(err);
+    }
+  };
+
   // ── Reset ──────────────────────────────────────────────────────────────────
   const handleReset = async () => {
     setSaving();
@@ -1099,13 +1171,51 @@ export default function App() {
             <div style={{ fontSize:13, color:"#555", marginTop:2 }}>All uploads write directly to Supabase — visible to all users instantly</div>
           </div>
           <div style={{ display:"grid", gap:12, maxWidth:720 }}>
-            <SectionLabel label="Volume Forecasts" sub="Upload 24-month forward-looking volume plan"/>
+
+            <SectionLabel label="① Product Catalogue" sub="Add multiple models at once — upload this first before forecasts or actuals"/>
+            <div style={{ border:"1px dashed #333", borderRadius:8, padding:"20px 24px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:16, background:"#0A0A0A" }}>
+              <div>
+                <div style={{ color:"#DDD", fontSize:13, fontWeight:600, marginBottom:4 }}>Bulk Product Import</div>
+                <div style={{ color:"#555", fontSize:12 }}>
+                  CSV: name, category, stage, asp, bom &nbsp;·&nbsp;
+                  <span style={{ color:"#47A3FF", cursor:"pointer", textDecoration:"underline" }}
+                    onClick={() => {
+                      const content = "name,category,stage,asp,bom\nBlaze,Kickscooters,Maturity,89,34\nVolt Jr,EV Rideons,Growth,249,98";
+                      const a = document.createElement("a");
+                      a.href = URL.createObjectURL(new Blob([content], { type:"text/csv" }));
+                      a.download = "template_products.csv"; a.click();
+                    }}>
+                    download template
+                  </span>
+                </div>
+              </div>
+              {(() => {
+                const ref = { current: null };
+                return (
+                  <>
+                    <input type="file" accept=".csv" ref={el => ref.current = el} style={{ display:"none" }}
+                      onChange={e => {
+                        const f = e.target.files[0]; if (!f) return;
+                        const r = new FileReader();
+                        r.onload = ev => handleProductsUpload(ev.target.result);
+                        r.readAsText(f); e.target.value = "";
+                      }}/>
+                    <button onClick={() => ref.current?.click()} style={btnStyle("#1A1A1A","#B847FF")}>
+                      <Icon.Upload/> Upload CSV
+                    </button>
+                  </>
+                );
+              })()}
+            </div>
+
+            <div style={{ height:8 }}/>
+            <SectionLabel label="② Volume Forecasts" sub="Upload 24-month forward-looking volume plan"/>
             <FileDropZone label="Volume Forecast" onUpload={handleForecastUpload} templateType="forecast" accent="#47FFD4"/>
             <div style={{ height:8 }}/>
-            <SectionLabel label="Monthly Actuals" sub="Upload actual shipped volumes — add each month"/>
+            <SectionLabel label="③ Monthly Actuals" sub="Upload actual shipped volumes — add each month"/>
             <FileDropZone label="Monthly Actuals" onUpload={handleActualsUpload} templateType="actuals" accent="#E8FF47"/>
             <div style={{ height:8 }}/>
-            <SectionLabel label="Pricing & Costs" sub="Update ASP and BoM for each model"/>
+            <SectionLabel label="④ Pricing & Costs" sub="Update ASP and BoM for each model"/>
             <FileDropZoneCost/>
           </div>
 
@@ -1113,8 +1223,9 @@ export default function App() {
             <div style={{ fontSize:13, fontWeight:600, color:"#FFF", marginBottom:16, fontFamily:"'Space Mono',monospace" }}>CSV FORMAT GUIDE</div>
             <div style={{ display:"grid", gap:16 }}>
               {[
-                { label:"Forecast & Actuals", cols:"model, month, volume", example:"Spark 100, Jan 2025, 500\nVolt Jr, Feb 2025, 320" },
-                { label:"Costs",              cols:"model, asp, bom",      example:"Spark 100, 89, 34\nVolt Jr, 249, 98" },
+                { label:"① Products",          cols:"name, category, stage, asp, bom",  example:"Blaze,Kickscooters,Maturity,89,34\nVolt Jr,EV Rideons,Growth,249,98" },
+                { label:"② Forecast & Actuals", cols:"model, month, volume",             example:"Blaze,Jul 2025,500\nVolt Jr,Aug 2025,320" },
+                { label:"④ Costs",              cols:"model, asp, bom",                  example:"Blaze,89,34\nVolt Jr,249,98" },
               ].map(g => (
                 <div key={g.label} style={{ background:"#0A0A0A", borderRadius:8, padding:16, border:"1px solid #1A1A1A" }}>
                   <div style={{ fontSize:12, color:"#AAA", fontWeight:600, marginBottom:8 }}>{g.label}</div>
@@ -1123,8 +1234,10 @@ export default function App() {
                 </div>
               ))}
             </div>
-            <div style={{ marginTop:16, fontSize:12, color:"#444" }}>
-              Month format: <span style={{ fontFamily:"monospace", color:"#555" }}>Jan 2025</span> · Model names must exactly match the catalogue · Uploads merge with existing data
+            <div style={{ marginTop:16, fontSize:12, color:"#444", lineHeight:1.8 }}>
+              Valid categories: <span style={{ color:"#555", fontFamily:"monospace" }}>Kickscooters, EV Rideons, Manual Rideons, Tricycles, Baby Walkers, Balance Bikes</span><br/>
+              Valid stages: <span style={{ color:"#555", fontFamily:"monospace" }}>Development, Launch, Growth, Maturity, Decline, Discontinued</span><br/>
+              Month format: <span style={{ color:"#555", fontFamily:"monospace" }}>Jul 2025</span> · Model names in forecasts/actuals must exactly match the catalogue
             </div>
           </div>
         </>}

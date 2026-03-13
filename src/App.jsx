@@ -838,7 +838,7 @@ export default function App() {
 
   // ── Main UI ────────────────────────────────────────────────────────────────
   return (
-    <div style={{ minHeight:"100vh", background:"#080808", color:"#E8E8E8", fontFamily:"'DM Sans',system-ui,sans-serif" }}>
+    <div style={{ minHeight:"100vh", width:"100%", background:"#080808", color:"#E8E8E8", fontFamily:"'DM Sans',system-ui,sans-serif" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
         * { box-sizing:border-box; margin:0; padding:0 }
@@ -892,7 +892,7 @@ export default function App() {
         </div>
       </header>
 
-      <main style={{ padding:"28px 32px", maxWidth:1400, margin:"0 auto" }}>
+      <main style={{ padding:"28px 32px", width:"100%", boxSizing:"border-box" }}>
 
         {/* ──────────── DASHBOARD ──────────── */}
         {activeTab === "dashboard" && <>

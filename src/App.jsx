@@ -222,7 +222,7 @@ const btnStyle = (bg, color) => ({
   transition:"opacity 0.15s", whiteSpace:"nowrap",
 });
 const thStyle = {
-  padding:"10px 14px", textAlign:"left", fontSize:10, color:"#888",
+  padding:"10px 14px", textAlign:"left", fontSize:10, color:"#CCC",
   textTransform:"uppercase", letterSpacing:1.5,
   fontFamily:"'Space Mono',monospace", fontWeight:400, whiteSpace:"nowrap",
 };
@@ -241,7 +241,7 @@ const SelectBox = ({ value, onChange, options, accent }) => (
         background:"#0D0D0D", width:"auto" }}>
       {options.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
     </select>
-    <div style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)", pointerEvents:"none", color:"#888" }}>
+    <div style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)", pointerEvents:"none", color:"#CCC" }}>
       <Icon.ChevronDown />
     </div>
   </div>
@@ -249,7 +249,7 @@ const SelectBox = ({ value, onChange, options, accent }) => (
 
 const FormField = ({ label, children }) => (
   <div>
-    <label style={{ display:"block", fontSize:11, color:"#888", textTransform:"uppercase",
+    <label style={{ display:"block", fontSize:11, color:"#CCC", textTransform:"uppercase",
       letterSpacing:1.5, marginBottom:7, fontFamily:"'Space Mono',monospace" }}>{label}</label>
     {children}
   </div>
@@ -258,7 +258,7 @@ const FormField = ({ label, children }) => (
 const SectionLabel = ({ label, sub }) => (
   <div style={{ marginBottom:4 }}>
     <div style={{ fontSize:14, fontWeight:600, color:"#DDD" }}>{label}</div>
-    <div style={{ fontSize:12, color:"#888", marginTop:2 }}>{sub}</div>
+    <div style={{ fontSize:12, color:"#CCC", marginTop:2 }}>{sub}</div>
   </div>
 );
 
@@ -266,11 +266,11 @@ const CustomTooltip = ({ active, payload, label, unit="" }) => {
   if (!active || !payload?.length) return null;
   return (
     <div style={{ background:"#0D0D0D", border:"1px solid #2A2A2A", borderRadius:6, padding:"10px 14px", fontSize:12 }}>
-      <div style={{ color:"#888", marginBottom:6, fontFamily:"'Space Mono',monospace" }}>{label}</div>
+      <div style={{ color:"#CCC", marginBottom:6, fontFamily:"'Space Mono',monospace" }}>{label}</div>
       {payload.map((p, i) => (
         <div key={i} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:3 }}>
           <div style={{ width:8, height:8, borderRadius:2, background:p.color }} />
-          <span style={{ color:"#AAA" }}>{p.name}:</span>
+          <span style={{ color:"#DDD" }}>{p.name}:</span>
           <span style={{ color:"#FFF", fontWeight:600 }}>
             {unit==="$" ? "$" : ""}{typeof p.value==="number" ? p.value.toLocaleString() : "-"}{unit==="vol" ? " units" : ""}
           </span>
@@ -282,7 +282,7 @@ const CustomTooltip = ({ active, payload, label, unit="" }) => {
 
 const SaveIndicator = ({ status }) => {
   const map = {
-    idle:   { color:"#777",    label:"Synced with database" },
+    idle:   { color:"#BBB",    label:"Synced with database" },
     saving: { color:"#F59E0B", label:"Saving…" },
     saved:  { color:"#10B981", label:"Saved" },
     error:  { color:"#EF4444", label:"Save error — check connection" },
@@ -300,6 +300,9 @@ const SaveIndicator = ({ status }) => {
 // ══════════════════════════════════════════════════════════════════════════════
 //  MAIN APP
 // ══════════════════════════════════════════════════════════════════════════════
+// ── ADMIN PASSWORD (change this to your own password) ─────────────────────────
+const ADMIN_PASSWORD = "BidPLC1!";
+
 export default function App() {
   // ── State ──────────────────────────────────────────────────────────────────
   const [loadState,     setLoadState]     = useState("loading"); // loading | ready | error
@@ -311,6 +314,10 @@ export default function App() {
   const [toast,         setToast]         = useState(null);
   const [modal,         setModal]         = useState(null);
   const [confirmReset,  setConfirmReset]  = useState(false);
+  const [isAdmin,       setIsAdmin]       = useState(false);
+  const [showPwModal,   setShowPwModal]   = useState(false);
+  const [pwInput,       setPwInput]       = useState("");
+  const [pwError,       setPwError]       = useState(false);
 
   // Dashboard filter state
   const [viewMode,       setViewMode]       = useState("volume");
@@ -332,6 +339,19 @@ export default function App() {
   const showToast = (msg, type="success") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3500);
+  };
+
+  const handleAdminLogin = () => {
+    if (pwInput === ADMIN_PASSWORD) {
+      setIsAdmin(true); setShowPwModal(false); setPwInput(""); setPwError(false);
+      showToast("Admin mode unlocked");
+    } else {
+      setPwError(true); setPwInput("");
+    }
+  };
+
+  const handleAdminLogout = () => {
+    setIsAdmin(false); showToast("Switched to read-only mode");
   };
 
   const setSaving = () => {
@@ -817,7 +837,7 @@ export default function App() {
       <div style={{ border:"1px dashed #333", borderRadius:8, padding:"20px 24px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:16, background:"#0A0A0A" }}>
         <div>
           <div style={{ color:"#DDD", fontSize:13, fontWeight:600, marginBottom:4 }}>{label}</div>
-          <div style={{ color:"#888", fontSize:12 }}>
+          <div style={{ color:"#CCC", fontSize:12 }}>
             CSV: model, month, volume &nbsp;·&nbsp;
             <span style={{ color:"#47A3FF", cursor:"pointer", textDecoration:"underline" }} onClick={() => downloadTemplate(templateType)}>
               download template
@@ -845,7 +865,7 @@ export default function App() {
       <div style={{ border:"1px dashed #333", borderRadius:8, padding:"20px 24px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:16, background:"#0A0A0A" }}>
         <div>
           <div style={{ color:"#DDD", fontSize:13, fontWeight:600, marginBottom:4 }}>ASP & BoM Costs</div>
-          <div style={{ color:"#888", fontSize:12 }}>
+          <div style={{ color:"#CCC", fontSize:12 }}>
             CSV: model, asp, bom &nbsp;·&nbsp;
             <span style={{ color:"#47A3FF", cursor:"pointer", textDecoration:"underline" }} onClick={() => downloadTemplate("costs")}>
               download template
@@ -869,7 +889,7 @@ export default function App() {
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
       `}</style>
       <div style={{ width:40, height:40, border:"2px solid #1E1E1E", borderTop:"2px solid #E8FF47", borderRadius:"50%", animation:"spin 0.8s linear infinite" }} />
-      <div style={{ fontFamily:"'Space Mono',monospace", fontSize:12, color:"#888", letterSpacing:3 }}>CONNECTING TO DATABASE…</div>
+      <div style={{ fontFamily:"'Space Mono',monospace", fontSize:12, color:"#CCC", letterSpacing:3 }}>CONNECTING TO DATABASE…</div>
     </div>
   );
 
@@ -879,7 +899,7 @@ export default function App() {
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');`}</style>
       <div style={{ fontSize:28 }}>⚠️</div>
       <div style={{ fontFamily:"'Space Mono',monospace", fontSize:14, color:"#EF4444" }}>DATABASE CONNECTION FAILED</div>
-      <div style={{ fontSize:13, color:"#888", maxWidth:400, textAlign:"center", lineHeight:1.7 }}>
+      <div style={{ fontSize:13, color:"#CCC", maxWidth:400, textAlign:"center", lineHeight:1.7 }}>
         {loadError}<br/><br/>
         Check that your <code style={{ color:"#47FFD4" }}>VITE_SUPABASE_URL</code> and <code style={{ color:"#47FFD4" }}>VITE_SUPABASE_ANON_KEY</code> environment variables are set correctly, and that your Supabase tables exist.
       </div>
@@ -915,12 +935,12 @@ export default function App() {
           </div>
           <div>
             <div style={{ fontFamily:"'Space Mono',monospace", fontSize:13, fontWeight:700, letterSpacing:1, color:"#FFF" }}>MOBILITY PLM</div>
-            <div style={{ fontSize:10, color:"#888", letterSpacing:2, textTransform:"uppercase" }}>Product Lifecycle Manager</div>
+            <div style={{ fontSize:10, color:"#CCC", letterSpacing:2, textTransform:"uppercase" }}>Product Lifecycle Manager</div>
           </div>
         </div>
 
         <nav style={{ display:"flex", gap:4 }}>
-          {["dashboard","products","data","upload"].map(tab => (
+          {["dashboard","products","data", ...(isAdmin ? ["upload"] : [])].map(tab => (
             <button key={tab} className="tab-btn" onClick={() => setActiveTab(tab)}
               style={{ ...btnReset, padding:"8px 16px", borderRadius:6, fontSize:13, fontWeight:500, textTransform:"capitalize",
                 background: activeTab===tab ? "#1E1E1E" : "transparent",
@@ -934,12 +954,25 @@ export default function App() {
 
         <div style={{ display:"flex", alignItems:"center", gap:16 }}>
           <SaveIndicator status={saveStatus} />
-          <button onClick={handleRefresh} style={{ ...btnReset, fontSize:11, color:"#888", cursor:"pointer", gap:5 }} title="Refresh from DB">
+          <button onClick={handleRefresh} style={{ ...btnReset, fontSize:11, color:"#CCC", cursor:"pointer", gap:5 }} title="Refresh from DB">
             <Icon.Refresh />
           </button>
-          <button onClick={() => setConfirmReset(true)} style={{ ...btnReset, fontSize:11, color:"#777", cursor:"pointer", gap:5 }}>
-            <Icon.Trash /> Reset
-          </button>
+          {isAdmin ? <>
+            <button onClick={() => setConfirmReset(true)} style={{ ...btnReset, fontSize:11, color:"#CCC", cursor:"pointer", gap:5 }}>
+              <Icon.Trash /> Reset
+            </button>
+            <button onClick={handleAdminLogout}
+              style={{ ...btnReset, padding:"5px 12px", borderRadius:6, fontSize:11, fontWeight:600,
+                background:"#1A1A1A", border:"1px solid #E8FF47", color:"#E8FF47", cursor:"pointer", gap:5 }}>
+              🔓 Admin
+            </button>
+          </> : (
+            <button onClick={() => { setPwInput(""); setPwError(false); setShowPwModal(true); }}
+              style={{ ...btnReset, padding:"5px 12px", borderRadius:6, fontSize:11, fontWeight:600,
+                background:"transparent", border:"1px solid #333", color:"#888", cursor:"pointer", gap:5 }}>
+              🔒 Read only
+            </button>
+          )}
         </div>
       </header>
 
@@ -952,7 +985,7 @@ export default function App() {
           <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:16, marginBottom:32 }}>
             {kpis.map((k, i) => (
               <div key={i} style={{ background:"#0D0D0D", border:"1px solid #1E1E1E", borderRadius:10, padding:"20px 22px", animation:`fadeUp 0.3s ease both`, animationDelay:`${i*60}ms` }}>
-                <div style={{ fontSize:11, color:"#888", textTransform:"uppercase", letterSpacing:1.5, marginBottom:10, fontFamily:"'Space Mono',monospace" }}>{k.label}</div>
+                <div style={{ fontSize:11, color:"#CCC", textTransform:"uppercase", letterSpacing:1.5, marginBottom:10, fontFamily:"'Space Mono',monospace" }}>{k.label}</div>
                 <div style={{ fontSize:28, fontWeight:700, color:"#FFF", fontFamily:"'Space Mono',monospace" }}>{k.value}</div>
                 {k.delta && <div style={{ fontSize:11, marginTop:6, color: k.delta==="on track" ? "#10B981" : "#F59E0B" }}>{k.delta==="on track" ? "✓ On track" : "⚠ Below forecast"}</div>}
               </div>
@@ -974,7 +1007,7 @@ export default function App() {
               <div style={{ background:"#0D0D0D", border:"1px solid #1E1E1E", borderRadius:12, padding:24, marginBottom:24 }}>
                 <div style={{ marginBottom:16 }}>
                   <div style={{ fontSize:15, fontWeight:700, color:"#FFF" }}>Overall Revenue — Forecast vs Actuals</div>
-                  <div style={{ fontSize:12, color:"#888", marginTop:3 }}>Dotted = Forecast · Solid = Actuals · $K · 24-month view</div>
+                  <div style={{ fontSize:12, color:"#CCC", marginTop:3 }}>Dotted = Forecast · Solid = Actuals · $K · 24-month view</div>
                 </div>
                 <ResponsiveContainer width="100%" height={300}>
                   <ComposedChart data={data} margin={{ top:4, right:16, bottom:4, left:0 }}>
@@ -994,7 +1027,7 @@ export default function App() {
           {/* ── 2. CATEGORY REVENUE ── */}
           <div style={{ marginBottom:8 }}>
             <div style={{ fontSize:15, fontWeight:700, color:"#FFF", marginBottom:4 }}>Revenue by Category — Forecast vs Actuals</div>
-            <div style={{ fontSize:12, color:"#888", marginBottom:20 }}>Dotted = Forecast · Solid = Actuals · $K</div>
+            <div style={{ fontSize:12, color:"#CCC", marginBottom:20 }}>Dotted = Forecast · Solid = Actuals · $K</div>
           </div>
           {CATEGORIES.map(cat => {
             const catProds = products.filter(p => p.category === cat);
@@ -1031,7 +1064,7 @@ export default function App() {
                   <div style={{ width:10, height:10, borderRadius:2, background:color }}/>
                   <div style={{ fontSize:13, fontWeight:600, color, textTransform:"uppercase", letterSpacing:2, fontFamily:"'Space Mono',monospace" }}>{cat}</div>
                   <div style={{ flex:1, height:1, background:"#1A1A1A" }}/>
-                  <div style={{ fontSize:11, color:"#888" }}>{catProds.length} models</div>
+                  <div style={{ fontSize:11, color:"#CCC" }}>{catProds.length} models</div>
                 </div>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
                   {/* Overall */}
@@ -1070,7 +1103,7 @@ export default function App() {
                       {catProds.map((p, pi) => (
                         <div key={p.id} style={{ display:"flex", alignItems:"center", gap:5 }}>
                           <div style={{ width:16, height:2, background:lineColors[pi % lineColors.length], borderRadius:1 }}/>
-                          <span style={{ fontSize:10, color:"#888" }}>{p.name}</span>
+                          <span style={{ fontSize:10, color:"#CCC" }}>{p.name}</span>
                         </div>
                       ))}
                     </div>
@@ -1083,7 +1116,7 @@ export default function App() {
           {/* ── 3. CATEGORY VOLUME ── */}
           <div style={{ marginBottom:8, marginTop:16 }}>
             <div style={{ fontSize:15, fontWeight:700, color:"#FFF", marginBottom:4 }}>Volume by Category — Forecast vs Actuals</div>
-            <div style={{ fontSize:12, color:"#888", marginBottom:20 }}>Dotted = Forecast · Solid = Actuals · Units</div>
+            <div style={{ fontSize:12, color:"#CCC", marginBottom:20 }}>Dotted = Forecast · Solid = Actuals · Units</div>
           </div>
           {CATEGORIES.map(cat => {
             const catProds = products.filter(p => p.category === cat);
@@ -1118,7 +1151,7 @@ export default function App() {
                   <div style={{ width:10, height:10, borderRadius:2, background:color }}/>
                   <div style={{ fontSize:13, fontWeight:600, color, textTransform:"uppercase", letterSpacing:2, fontFamily:"'Space Mono',monospace" }}>{cat}</div>
                   <div style={{ flex:1, height:1, background:"#1A1A1A" }}/>
-                  <div style={{ fontSize:11, color:"#888" }}>{catProds.length} models</div>
+                  <div style={{ fontSize:11, color:"#CCC" }}>{catProds.length} models</div>
                 </div>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
                   <div style={{ background:"#0D0D0D", border:"1px solid #1E1E1E", borderRadius:10, padding:20 }}>
@@ -1154,7 +1187,7 @@ export default function App() {
                       {catProds.map((p, pi) => (
                         <div key={p.id} style={{ display:"flex", alignItems:"center", gap:5 }}>
                           <div style={{ width:16, height:2, background:lineColors[pi % lineColors.length], borderRadius:1 }}/>
-                          <span style={{ fontSize:10, color:"#888" }}>{p.name}</span>
+                          <span style={{ fontSize:10, color:"#CCC" }}>{p.name}</span>
                         </div>
                       ))}
                     </div>
@@ -1167,7 +1200,7 @@ export default function App() {
           {/* ── 4. CUSTOM MODEL SELECTOR CHARTS ── */}
           <div style={{ marginTop:16, marginBottom:16 }}>
             <div style={{ fontSize:15, fontWeight:700, color:"#FFF", marginBottom:4 }}>Custom Model Comparison</div>
-            <div style={{ fontSize:12, color:"#888", marginBottom:16 }}>Select models to compare · Dotted = Forecast · Solid = Actuals</div>
+            <div style={{ fontSize:12, color:"#CCC", marginBottom:16 }}>Select models to compare · Dotted = Forecast · Solid = Actuals</div>
             {/* Model multi-select pills */}
             <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:20 }}>
               {products.map(p => {
@@ -1185,9 +1218,9 @@ export default function App() {
                 );
               })}
               <button onClick={() => setChartSelectedModels(new Set(products.map(p=>p.id)))}
-                style={{ ...btnReset, padding:"5px 12px", borderRadius:20, fontSize:11, color:"#888", border:"1px solid #222", cursor:"pointer" }}>All</button>
+                style={{ ...btnReset, padding:"5px 12px", borderRadius:20, fontSize:11, color:"#CCC", border:"1px solid #222", cursor:"pointer" }}>All</button>
               <button onClick={() => setChartSelectedModels(new Set())}
-                style={{ ...btnReset, padding:"5px 12px", borderRadius:20, fontSize:11, color:"#888", border:"1px solid #222", cursor:"pointer" }}>None</button>
+                style={{ ...btnReset, padding:"5px 12px", borderRadius:20, fontSize:11, color:"#CCC", border:"1px solid #222", cursor:"pointer" }}>None</button>
             </div>
           </div>
 
@@ -1218,7 +1251,7 @@ export default function App() {
             const ChartBlock = ({ title, data, unit }) => (
               <div style={{ background:"#0D0D0D", border:"1px solid #1E1E1E", borderRadius:12, padding:24, flex:1 }}>
                 <div style={{ fontSize:13, fontWeight:600, color:"#FFF", marginBottom:4 }}>{title}</div>
-                <div style={{ fontSize:11, color:"#888", marginBottom:16 }}>{selProds.length} models selected</div>
+                <div style={{ fontSize:11, color:"#CCC", marginBottom:16 }}>{selProds.length} models selected</div>
                 <ResponsiveContainer width="100%" height={280}>
                   <ComposedChart data={data} margin={{ top:4, right:16, bottom:4, left:0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#1A1A1A" vertical={false}/>
@@ -1236,7 +1269,7 @@ export default function App() {
                   {selProds.map((p, pi) => (
                     <div key={p.id} style={{ display:"flex", alignItems:"center", gap:5 }}>
                       <div style={{ width:16, height:2, background:lineColors[pi % lineColors.length], borderRadius:1 }}/>
-                      <span style={{ fontSize:10, color:"#888" }}>{p.name}</span>
+                      <span style={{ fontSize:10, color:"#CCC" }}>{p.name}</span>
                     </div>
                   ))}
                 </div>
@@ -1258,9 +1291,9 @@ export default function App() {
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24 }}>
             <div>
               <div style={{ fontSize:20, fontWeight:700, color:"#FFF" }}>Product Catalogue</div>
-              <div style={{ fontSize:13, color:"#888", marginTop:2 }}>{products.length} models · synced to Supabase</div>
+              <div style={{ fontSize:13, color:"#CCC", marginTop:2 }}>{products.length} models · {isAdmin ? "admin mode" : "read only"}</div>
             </div>
-            <button onClick={() => setModal("addProduct")} style={btnStyle("#E8FF47","#080808")}><Icon.Plus/> Add Model</button>
+            {isAdmin && <button onClick={() => setModal("addProduct")} style={btnStyle("#E8FF47","#080808")}><Icon.Plus/> Add Model</button>}
           </div>
 
           <div style={{ display:"flex", gap:10, marginBottom:24, flexWrap:"wrap" }}>
@@ -1269,7 +1302,7 @@ export default function App() {
               return (
                 <div key={stage} style={{ background:"#0D0D0D", border:"1px solid #1E1E1E", borderRadius:8, padding:"12px 18px", display:"flex", gap:10, alignItems:"center" }}>
                   <div style={{ width:8, height:8, borderRadius:2, background:STAGE_COLORS[stage] }}/>
-                  <span style={{ fontSize:12, color:"#888" }}>{stage}</span>
+                  <span style={{ fontSize:12, color:"#CCC" }}>{stage}</span>
                   <span style={{ fontSize:14, fontWeight:700, color:"#FFF", fontFamily:"'Space Mono',monospace" }}>{count}</span>
                 </div>
               );
@@ -1284,7 +1317,7 @@ export default function App() {
                   <div style={{ width:10, height:10, borderRadius:2, background:CATEGORY_COLORS[cat] }}/>
                   <div style={{ fontSize:13, fontWeight:600, color:CATEGORY_COLORS[cat], textTransform:"uppercase", letterSpacing:2, fontFamily:"'Space Mono',monospace" }}>{cat}</div>
                   <div style={{ flex:1, height:1, background:"#1A1A1A" }}/>
-                  <div style={{ fontSize:11, color:"#888" }}>{catProds.length} models</div>
+                  <div style={{ fontSize:11, color:"#CCC" }}>{catProds.length} models</div>
                 </div>
                 <div style={{ background:"#0D0D0D", border:"1px solid #1E1E1E", borderRadius:10, overflow:"hidden" }}>
                   <table style={{ width:"100%", borderCollapse:"collapse" }}>
@@ -1306,14 +1339,13 @@ export default function App() {
                           <tr key={p.id} className="row-hover" style={{ borderBottom:"1px solid #131313", transition:"background 0.1s" }}>
                             <td style={{ padding:"11px 14px", fontSize:13, fontWeight:600, color:"#FFF" }}>{p.name}</td>
                             <td style={{ padding:"11px 14px" }}>
-                              {/* Clickable stage badge — cycles through stages and saves */}
-                              <button onClick={async()=>{
+                              <button onClick={isAdmin ? async()=>{
                                 const idx=(LIFECYCLE_STAGES.indexOf(p.stage)+1)%LIFECYCLE_STAGES.length;
                                 await updateProduct(p.id,{stage:LIFECYCLE_STAGES[idx]});
-                              }} title="Click to advance stage" style={{ ...btnReset,
+                              } : undefined} title={isAdmin ? "Click to advance stage" : p.stage} style={{ ...btnReset,
                                 background:`${STAGE_COLORS[p.stage]}22`, color:STAGE_COLORS[p.stage],
                                 padding:"3px 9px", borderRadius:4, fontSize:11, fontWeight:600,
-                                border:`1px solid ${STAGE_COLORS[p.stage]}44`, cursor:"pointer" }}>
+                                border:`1px solid ${STAGE_COLORS[p.stage]}44`, cursor: isAdmin ? "pointer" : "default" }}>
                                 {p.stage}
                               </button>
                             </td>
@@ -1327,8 +1359,8 @@ export default function App() {
                                 <span style={{ fontSize:11, color:"#DDD", fontFamily:"'Space Mono',monospace" }}>{mg}%</span>
                               </div>
                             </td>
-                            <td style={{ padding:"11px 14px", fontSize:12, color:"#AAA", fontFamily:"'Space Mono',monospace" }}>{f12.toLocaleString()}</td>
-                            <td style={{ padding:"11px 14px", fontSize:12, color:"#AAA", fontFamily:"'Space Mono',monospace" }}>{aYTD.toLocaleString()}</td>
+                            <td style={{ padding:"11px 14px", fontSize:12, color:"#DDD", fontFamily:"'Space Mono',monospace" }}>{f12.toLocaleString()}</td>
+                            <td style={{ padding:"11px 14px", fontSize:12, color:"#DDD", fontFamily:"'Space Mono',monospace" }}>{aYTD.toLocaleString()}</td>
                             <td style={{ padding:"11px 14px" }}>
                               <button onClick={() => setSelectedModels(prev => { const s=new Set(prev); s.has(p.id)?s.delete(p.id):s.add(p.id); return s; })}
                                 style={{ ...btnReset, width:22, height:22, borderRadius:4,
@@ -1353,7 +1385,7 @@ export default function App() {
         {activeTab === "data" && <>
           <div style={{ marginBottom:24 }}>
             <div style={{ fontSize:20, fontWeight:700, color:"#FFF" }}>Volume Data</div>
-            <div style={{ fontSize:13, color:"#888", marginTop:2 }}>Forecast vs Actuals — 24 months · live from Supabase</div>
+            <div style={{ fontSize:13, color:"#CCC", marginTop:2 }}>Forecast vs Actuals — 24 months · live from Supabase</div>
           </div>
           <div style={{ display:"flex", gap:8, marginBottom:20, flexWrap:"wrap" }}>
             {CATEGORIES.map(cat => (
@@ -1384,9 +1416,9 @@ export default function App() {
                       <tr key={`${p.id}-f`} className="row-hover" style={{ borderBottom:"1px solid #0F0F0F" }}>
                         <td style={{ padding:"9px 14px", fontSize:12, fontWeight:600, color:"#CCC" }} rowSpan={2}>{p.name}</td>
                         <td style={{ padding:"9px 14px", fontSize:10, color:CATEGORY_COLORS[p.category] }}>{p.category.split(" ")[0]}</td>
-                        <td style={{ padding:"9px 14px" }}><span style={{ fontSize:9, color:"#777", textTransform:"uppercase", letterSpacing:1 }}>F</span></td>
+                        <td style={{ padding:"9px 14px" }}><span style={{ fontSize:9, color:"#BBB", textTransform:"uppercase", letterSpacing:1 }}>F</span></td>
                         {MONTHS.slice(0,12).map((m,mi) => (
-                          <td key={m} style={{ padding:"9px 8px", fontSize:11, color:"#777", textAlign:"right", fontFamily:"'Space Mono',monospace" }}>
+                          <td key={m} style={{ padding:"9px 8px", fontSize:11, color:"#BBB", textAlign:"right", fontFamily:"'Space Mono',monospace" }}>
                             {fd?.forecast[mi]?.toLocaleString() || "-"}
                           </td>
                         ))}
@@ -1410,8 +1442,8 @@ export default function App() {
                 </tbody>
               </table>
             </div>
-            <div style={{ padding:"10px 14px", borderTop:"1px solid #1A1A1A", display:"flex", gap:16, fontSize:11, color:"#888" }}>
-              <span style={{ color:"#777" }}>F = Forecast</span>
+            <div style={{ padding:"10px 14px", borderTop:"1px solid #1A1A1A", display:"flex", gap:16, fontSize:11, color:"#CCC" }}>
+              <span style={{ color:"#BBB" }}>F = Forecast</span>
               <span style={{ color:"#47FFD4" }}>A = Actuals</span>
               <span style={{ color:"#10B981" }}>≥100%</span>
               <span style={{ color:"#F59E0B" }}>80–99%</span>
@@ -1424,7 +1456,7 @@ export default function App() {
         {activeTab === "upload" && <>
           <div style={{ marginBottom:28 }}>
             <div style={{ fontSize:20, fontWeight:700, color:"#FFF" }}>Data Upload</div>
-            <div style={{ fontSize:13, color:"#888", marginTop:2 }}>All uploads write directly to Supabase — visible to all users instantly</div>
+            <div style={{ fontSize:13, color:"#CCC", marginTop:2 }}>All uploads write directly to Supabase — visible to all users instantly</div>
           </div>
           <div style={{ display:"grid", gap:12, maxWidth:720 }}>
 
@@ -1432,7 +1464,7 @@ export default function App() {
             <div style={{ border:"1px dashed #333", borderRadius:8, padding:"20px 24px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:16, background:"#0A0A0A" }}>
               <div>
                 <div style={{ color:"#DDD", fontSize:13, fontWeight:600, marginBottom:4 }}>Bulk Product Import</div>
-                <div style={{ color:"#888", fontSize:12 }}>
+                <div style={{ color:"#CCC", fontSize:12 }}>
                   CSV: name, category, stage, asp, bom &nbsp;·&nbsp;
                   <span style={{ color:"#47A3FF", cursor:"pointer", textDecoration:"underline" }}
                     onClick={() => {
@@ -1484,16 +1516,16 @@ export default function App() {
                 { label:"④ Costs",              cols:"model, asp, bom",                  example:"Blaze,89,34\nVolt Jr,249,98" },
               ].map(g => (
                 <div key={g.label} style={{ background:"#0A0A0A", borderRadius:8, padding:16, border:"1px solid #1A1A1A" }}>
-                  <div style={{ fontSize:12, color:"#AAA", fontWeight:600, marginBottom:8 }}>{g.label}</div>
-                  <div style={{ fontSize:11, color:"#888", marginBottom:8 }}>Columns: <span style={{ color:"#47FFD4", fontFamily:"monospace" }}>{g.cols}</span></div>
-                  <pre style={{ fontSize:11, color:"#666", fontFamily:"monospace", lineHeight:1.8, margin:0 }}>{g.example}</pre>
+                  <div style={{ fontSize:12, color:"#DDD", fontWeight:600, marginBottom:8 }}>{g.label}</div>
+                  <div style={{ fontSize:11, color:"#CCC", marginBottom:8 }}>Columns: <span style={{ color:"#47FFD4", fontFamily:"monospace" }}>{g.cols}</span></div>
+                  <pre style={{ fontSize:11, color:"#DDD", fontFamily:"monospace", lineHeight:1.8, margin:0 }}>{g.example}</pre>
                 </div>
               ))}
             </div>
-            <div style={{ marginTop:16, fontSize:12, color:"#777", lineHeight:1.8 }}>
-              Valid categories: <span style={{ color:"#888", fontFamily:"monospace" }}>Kickscooters, EV Rideons, Manual Rideons, Tricycles, Baby Walkers, Balance Bikes</span><br/>
-              Valid stages: <span style={{ color:"#888", fontFamily:"monospace" }}>Development, Launch, Growth, Maturity, Decline, Discontinued</span><br/>
-              Month format: <span style={{ color:"#888", fontFamily:"monospace" }}>Jul 2025</span> · Model names in forecasts/actuals must exactly match the catalogue
+            <div style={{ marginTop:16, fontSize:12, color:"#BBB", lineHeight:1.8 }}>
+              Valid categories: <span style={{ color:"#CCC", fontFamily:"monospace" }}>Kickscooters, EV Rideons, Manual Rideons, Tricycles, Baby Walkers, Balance Bikes</span><br/>
+              Valid stages: <span style={{ color:"#CCC", fontFamily:"monospace" }}>Development, Launch, Growth, Maturity, Decline, Discontinued</span><br/>
+              Month format: <span style={{ color:"#CCC", fontFamily:"monospace" }}>Jul 2025</span> · Model names in forecasts/actuals must exactly match the catalogue
             </div>
           </div>
         </>}
@@ -1506,7 +1538,7 @@ export default function App() {
           <div style={{ background:"#0D0D0D", border:"1px solid #2A2A2A", borderRadius:14, padding:28, width:420, maxWidth:"90vw" }} onClick={e => e.stopPropagation()}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:22 }}>
               <div style={{ fontSize:16, fontWeight:700, color:"#FFF" }}>Add New Model</div>
-              <button onClick={() => setModal(null)} style={{ ...btnReset, color:"#888", cursor:"pointer", padding:4 }}><Icon.X/></button>
+              <button onClick={() => setModal(null)} style={{ ...btnReset, color:"#CCC", cursor:"pointer", padding:4 }}><Icon.X/></button>
             </div>
             <div style={{ display:"grid", gap:14 }}>
               <FormField label="Model Name">
@@ -1517,7 +1549,7 @@ export default function App() {
                   <select value={newProd.category} onChange={e=>setNewProd(p=>({...p,category:e.target.value}))} style={{ ...inputStyle, paddingRight:28 }}>
                     {CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
                   </select>
-                  <div style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", pointerEvents:"none", color:"#888" }}><Icon.ChevronDown/></div>
+                  <div style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", pointerEvents:"none", color:"#CCC" }}><Icon.ChevronDown/></div>
                 </div>
               </FormField>
               <FormField label="Lifecycle Stage">
@@ -1525,7 +1557,7 @@ export default function App() {
                   <select value={newProd.stage} onChange={e=>setNewProd(p=>({...p,stage:e.target.value}))} style={{ ...inputStyle, paddingRight:28 }}>
                     {LIFECYCLE_STAGES.map(s=><option key={s} value={s}>{s}</option>)}
                   </select>
-                  <div style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", pointerEvents:"none", color:"#888" }}><Icon.ChevronDown/></div>
+                  <div style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", pointerEvents:"none", color:"#CCC" }}><Icon.ChevronDown/></div>
                 </div>
               </FormField>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
@@ -1553,12 +1585,41 @@ export default function App() {
               <Icon.Trash/>
             </div>
             <div style={{ fontSize:16, fontWeight:700, color:"#FFF", marginBottom:8 }}>Reset all data?</div>
-            <div style={{ fontSize:13, color:"#666", marginBottom:24, lineHeight:1.6 }}>
+            <div style={{ fontSize:13, color:"#DDD", marginBottom:24, lineHeight:1.6 }}>
               This will <strong style={{ color:"#EF4444" }}>permanently delete</strong> all products, forecasts, and actuals from the database for all users, and restore the sample catalogue.
             </div>
             <div style={{ display:"flex", gap:10, justifyContent:"center" }}>
               <button onClick={() => setConfirmReset(false)} style={btnStyle("#1A1A1A","#888")}>Cancel</button>
               <button onClick={handleReset} style={btnStyle("#EF4444","#FFF")}>Yes, reset everything</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── ADMIN PASSWORD MODAL ── */}
+      {showPwModal && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.8)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:999 }}
+          onClick={() => setShowPwModal(false)}>
+          <div style={{ background:"#0D0D0D", border:"1px solid #2A2A2A", borderRadius:14, padding:28, width:360, maxWidth:"90vw" }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+              <div style={{ fontSize:15, fontWeight:700, color:"#FFF" }}>Admin Login</div>
+              <button onClick={() => setShowPwModal(false)} style={{ ...btnReset, color:"#CCC", cursor:"pointer", padding:4 }}><Icon.X/></button>
+            </div>
+            <div style={{ fontSize:13, color:"#CCC", marginBottom:16 }}>Enter the admin password to unlock edit mode.</div>
+            <input
+              type="password"
+              value={pwInput}
+              onChange={e => { setPwInput(e.target.value); setPwError(false); }}
+              onKeyDown={e => e.key === "Enter" && handleAdminLogin()}
+              placeholder="Password"
+              autoFocus
+              style={{ ...inputStyle, marginBottom:8, border: pwError ? "1px solid #EF4444" : "1px solid #2A2A2A" }}
+            />
+            {pwError && <div style={{ fontSize:12, color:"#EF4444", marginBottom:12 }}>Incorrect password — try again</div>}
+            <div style={{ display:"flex", gap:10, marginTop:16, justifyContent:"flex-end" }}>
+              <button onClick={() => setShowPwModal(false)} style={btnStyle("#1A1A1A","#888")}>Cancel</button>
+              <button onClick={handleAdminLogin} style={btnStyle("#E8FF47","#080808")}>Unlock</button>
             </div>
           </div>
         </div>

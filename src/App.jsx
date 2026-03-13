@@ -222,7 +222,7 @@ const btnStyle = (bg, color) => ({
   transition:"opacity 0.15s", whiteSpace:"nowrap",
 });
 const thStyle = {
-  padding:"10px 14px", textAlign:"left", fontSize:10, color:"#555",
+  padding:"10px 14px", textAlign:"left", fontSize:10, color:"#888",
   textTransform:"uppercase", letterSpacing:1.5,
   fontFamily:"'Space Mono',monospace", fontWeight:400, whiteSpace:"nowrap",
 };
@@ -241,7 +241,7 @@ const SelectBox = ({ value, onChange, options, accent }) => (
         background:"#0D0D0D", width:"auto" }}>
       {options.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
     </select>
-    <div style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)", pointerEvents:"none", color:"#555" }}>
+    <div style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)", pointerEvents:"none", color:"#888" }}>
       <Icon.ChevronDown />
     </div>
   </div>
@@ -249,7 +249,7 @@ const SelectBox = ({ value, onChange, options, accent }) => (
 
 const FormField = ({ label, children }) => (
   <div>
-    <label style={{ display:"block", fontSize:11, color:"#555", textTransform:"uppercase",
+    <label style={{ display:"block", fontSize:11, color:"#888", textTransform:"uppercase",
       letterSpacing:1.5, marginBottom:7, fontFamily:"'Space Mono',monospace" }}>{label}</label>
     {children}
   </div>
@@ -258,7 +258,7 @@ const FormField = ({ label, children }) => (
 const SectionLabel = ({ label, sub }) => (
   <div style={{ marginBottom:4 }}>
     <div style={{ fontSize:14, fontWeight:600, color:"#DDD" }}>{label}</div>
-    <div style={{ fontSize:12, color:"#555", marginTop:2 }}>{sub}</div>
+    <div style={{ fontSize:12, color:"#888", marginTop:2 }}>{sub}</div>
   </div>
 );
 
@@ -282,7 +282,7 @@ const CustomTooltip = ({ active, payload, label, unit="" }) => {
 
 const SaveIndicator = ({ status }) => {
   const map = {
-    idle:   { color:"#444",    label:"Synced with database" },
+    idle:   { color:"#777",    label:"Synced with database" },
     saving: { color:"#F59E0B", label:"Saving…" },
     saved:  { color:"#10B981", label:"Saved" },
     error:  { color:"#EF4444", label:"Save error — check connection" },
@@ -318,6 +318,8 @@ export default function App() {
   const [filterCat,      setFilterCat]      = useState("All");
   const [filterStage,    setFilterStage]    = useState("All");
   const [selectedModels, setSelectedModels] = useState(new Set());
+  // Model selector for custom chart (section 4)
+  const [chartSelectedModels, setChartSelectedModels] = useState(new Set());
 
   // Add product form
   const [newProd, setNewProd] = useState({
@@ -366,6 +368,7 @@ export default function App() {
         setProducts(prods);
         setVolData(vd);
         setSelectedModels(new Set(prods.map(p => p.id)));
+        setChartSelectedModels(new Set(prods.map(p => p.id)));
         setLoadState("ready");
       } catch (err) {
         console.error("Load error:", err);
@@ -404,6 +407,7 @@ export default function App() {
         [inserted.id]: { forecast, actuals: Array(24).fill(null) },
       }));
       setSelectedModels(prev => new Set([...prev, inserted.id]));
+      setChartSelectedModels(prev => new Set([...prev, inserted.id]));
       setNewProd({ name:"", category:CATEGORIES[0], stage:"Development", asp:0, bom:0 });
       setModal(null);
       setSaved();
@@ -627,6 +631,7 @@ export default function App() {
       setProducts(prods);
       setVolData(vd);
       setSelectedModels(new Set(prods.map(p => p.id)));
+      setChartSelectedModels(new Set(prods.map(p => p.id)));
       setConfirmReset(false);
       setSaved();
       showToast("Data reset to sample catalogue");
@@ -721,21 +726,67 @@ export default function App() {
   }, [filteredProducts, volData, viewMode, groupBy]);
 
   const kpis = useMemo(() => {
-    let fVol = 0, aVol = 0, fRev = 0, fMar = 0;
+    // ── Financial year YTD: Apr–Mar ──────────────────────────────────────────
+    // Work out which month indices fall in the current FY up to today
+    // MONTHS array starts Jan 2025 (index 0). Today marker = index 13 (Feb 2026).
+    // Current FY: Apr 2025 (index 3) → Mar 2026 (index 14)
+    // FY start = April of whichever calendar year gives us the active FY
+    const todayIdx = CURRENT_MONTH_IDX; // last month with data
+    const todayDate = new Date(2025, 0 + todayIdx, 1); // approximate real date from index
+    // FY starts April: if current month >= April, FY start = this year's April, else last year's
+    const fyStartYear = todayDate.getMonth() >= 3 ? todayDate.getFullYear() : todayDate.getFullYear() - 1;
+    const fyStartDate = new Date(fyStartYear, 3, 1); // April 1
+    const fyEndDate   = new Date(fyStartYear + 1, 2, 31); // March 31 next year
+
+    // Find MONTHS indices that are within this FY and up to todayIdx
+    const fyYtdIndices = MONTHS.reduce((acc, m, i) => {
+      const [mon, yr] = m.split(" ");
+      const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      const d = new Date(parseInt(yr), months.indexOf(mon), 1);
+      if (d >= fyStartDate && d <= fyEndDate && i <= todayIdx) acc.push(i);
+      return acc;
+    }, []);
+
+    // Full FY indices (for full-year forecast rev / margin)
+    const fyAllIndices = MONTHS.reduce((acc, m, i) => {
+      const [mon, yr] = m.split(" ");
+      const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      const d = new Date(parseInt(yr), months.indexOf(mon), 1);
+      if (d >= fyStartDate && d <= fyEndDate) acc.push(i);
+      return acc;
+    }, []);
+
+    let fVolYtd = 0, aVolYtd = 0, fRevFY = 0, fMarFY = 0;
+
     filteredProducts.forEach(p => {
       const fd = volData[p.id]; if (!fd) return;
-      fd.forecast.forEach((v, i) => {
-        if (i <= CURRENT_MONTH_IDX) { fVol += v; fRev += v * p.asp; fMar += v * p.asp * ((p.asp - p.bom) / p.asp); }
+      const margin = p.asp > 0 ? (p.asp - p.bom) / p.asp : 0;
+
+      // Attainment: forecast vs actuals for YTD months only
+      fyYtdIndices.forEach(i => {
+        fVolYtd += fd.forecast[i] || 0;
+        if (fd.actuals[i] != null) aVolYtd += fd.actuals[i];
       });
-      fd.actuals.forEach(v => { if (v != null) aVol += v; });
+
+      // Revenue & margin: full FY forecast
+      fyAllIndices.forEach(i => {
+        const v = fd.forecast[i] || 0;
+        fRevFY  += v * p.asp;
+        fMarFY  += v * p.asp * margin;
+      });
     });
-    const attain   = fVol > 0 ? Math.round(aVol / fVol * 100) : 0;
-    const avgMargin = fRev > 0 ? Math.round(fMar / fRev * 100) : 0;
+
+    const attain    = fVolYtd > 0 ? Math.round(aVolYtd / fVolYtd * 100) : 0;
+    const avgMargin = fRevFY  > 0 ? Math.round(fMarFY  / fRevFY  * 100) : 0;
+
+    // FY label e.g. "FY25-26"
+    const fyLabel = `FY${String(fyStartYear).slice(2)}-${String(fyStartYear+1).slice(2)}`;
+
     return [
-      { label:"Active Models",       value: filteredProducts.filter(p => !["Discontinued","Development"].includes(p.stage)).length },
-      { label:"Forecast Attainment", value:`${attain}%`, delta: attain >= 100 ? "on track" : "below" },
-      { label:"Total Forecast Rev",  value:`$${(fRev / 1e6).toFixed(1)}M` },
-      { label:"Avg Gross Margin",    value: fRev > 0 ? `${avgMargin}%` : "—" },
+      { label:"Active Models",                value: filteredProducts.filter(p => !["Discontinued","Development"].includes(p.stage)).length },
+      { label:`Forecast Attainment ${fyLabel} YTD`, value:`${attain}%`, delta: attain >= 100 ? "on track" : "below" },
+      { label:`Total Forecast Rev ${fyLabel}`,      value:`$${(fRevFY / 1e6).toFixed(1)}M` },
+      { label:`Avg Gross Margin ${fyLabel}`,        value: fRevFY > 0 ? `${avgMargin}%` : "—" },
     ];
   }, [filteredProducts, volData]);
 
@@ -766,7 +817,7 @@ export default function App() {
       <div style={{ border:"1px dashed #333", borderRadius:8, padding:"20px 24px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:16, background:"#0A0A0A" }}>
         <div>
           <div style={{ color:"#DDD", fontSize:13, fontWeight:600, marginBottom:4 }}>{label}</div>
-          <div style={{ color:"#555", fontSize:12 }}>
+          <div style={{ color:"#888", fontSize:12 }}>
             CSV: model, month, volume &nbsp;·&nbsp;
             <span style={{ color:"#47A3FF", cursor:"pointer", textDecoration:"underline" }} onClick={() => downloadTemplate(templateType)}>
               download template
@@ -794,7 +845,7 @@ export default function App() {
       <div style={{ border:"1px dashed #333", borderRadius:8, padding:"20px 24px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:16, background:"#0A0A0A" }}>
         <div>
           <div style={{ color:"#DDD", fontSize:13, fontWeight:600, marginBottom:4 }}>ASP & BoM Costs</div>
-          <div style={{ color:"#555", fontSize:12 }}>
+          <div style={{ color:"#888", fontSize:12 }}>
             CSV: model, asp, bom &nbsp;·&nbsp;
             <span style={{ color:"#47A3FF", cursor:"pointer", textDecoration:"underline" }} onClick={() => downloadTemplate("costs")}>
               download template
@@ -818,7 +869,7 @@ export default function App() {
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
       `}</style>
       <div style={{ width:40, height:40, border:"2px solid #1E1E1E", borderTop:"2px solid #E8FF47", borderRadius:"50%", animation:"spin 0.8s linear infinite" }} />
-      <div style={{ fontFamily:"'Space Mono',monospace", fontSize:12, color:"#555", letterSpacing:3 }}>CONNECTING TO DATABASE…</div>
+      <div style={{ fontFamily:"'Space Mono',monospace", fontSize:12, color:"#888", letterSpacing:3 }}>CONNECTING TO DATABASE…</div>
     </div>
   );
 
@@ -828,7 +879,7 @@ export default function App() {
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');`}</style>
       <div style={{ fontSize:28 }}>⚠️</div>
       <div style={{ fontFamily:"'Space Mono',monospace", fontSize:14, color:"#EF4444" }}>DATABASE CONNECTION FAILED</div>
-      <div style={{ fontSize:13, color:"#555", maxWidth:400, textAlign:"center", lineHeight:1.7 }}>
+      <div style={{ fontSize:13, color:"#888", maxWidth:400, textAlign:"center", lineHeight:1.7 }}>
         {loadError}<br/><br/>
         Check that your <code style={{ color:"#47FFD4" }}>VITE_SUPABASE_URL</code> and <code style={{ color:"#47FFD4" }}>VITE_SUPABASE_ANON_KEY</code> environment variables are set correctly, and that your Supabase tables exist.
       </div>
@@ -864,7 +915,7 @@ export default function App() {
           </div>
           <div>
             <div style={{ fontFamily:"'Space Mono',monospace", fontSize:13, fontWeight:700, letterSpacing:1, color:"#FFF" }}>MOBILITY PLM</div>
-            <div style={{ fontSize:10, color:"#555", letterSpacing:2, textTransform:"uppercase" }}>Product Lifecycle Manager</div>
+            <div style={{ fontSize:10, color:"#888", letterSpacing:2, textTransform:"uppercase" }}>Product Lifecycle Manager</div>
           </div>
         </div>
 
@@ -883,10 +934,10 @@ export default function App() {
 
         <div style={{ display:"flex", alignItems:"center", gap:16 }}>
           <SaveIndicator status={saveStatus} />
-          <button onClick={handleRefresh} style={{ ...btnReset, fontSize:11, color:"#555", cursor:"pointer", gap:5 }} title="Refresh from DB">
+          <button onClick={handleRefresh} style={{ ...btnReset, fontSize:11, color:"#888", cursor:"pointer", gap:5 }} title="Refresh from DB">
             <Icon.Refresh />
           </button>
-          <button onClick={() => setConfirmReset(true)} style={{ ...btnReset, fontSize:11, color:"#444", cursor:"pointer", gap:5 }}>
+          <button onClick={() => setConfirmReset(true)} style={{ ...btnReset, fontSize:11, color:"#777", cursor:"pointer", gap:5 }}>
             <Icon.Trash /> Reset
           </button>
         </div>
@@ -896,105 +947,310 @@ export default function App() {
 
         {/* ──────────── DASHBOARD ──────────── */}
         {activeTab === "dashboard" && <>
+
           {/* KPI cards */}
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:16, marginBottom:28 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:16, marginBottom:32 }}>
             {kpis.map((k, i) => (
               <div key={i} style={{ background:"#0D0D0D", border:"1px solid #1E1E1E", borderRadius:10, padding:"20px 22px", animation:`fadeUp 0.3s ease both`, animationDelay:`${i*60}ms` }}>
-                <div style={{ fontSize:11, color:"#555", textTransform:"uppercase", letterSpacing:2, marginBottom:10, fontFamily:"'Space Mono',monospace" }}>{k.label}</div>
+                <div style={{ fontSize:11, color:"#888", textTransform:"uppercase", letterSpacing:1.5, marginBottom:10, fontFamily:"'Space Mono',monospace" }}>{k.label}</div>
                 <div style={{ fontSize:28, fontWeight:700, color:"#FFF", fontFamily:"'Space Mono',monospace" }}>{k.value}</div>
                 {k.delta && <div style={{ fontSize:11, marginTop:6, color: k.delta==="on track" ? "#10B981" : "#F59E0B" }}>{k.delta==="on track" ? "✓ On track" : "⚠ Below forecast"}</div>}
               </div>
             ))}
           </div>
 
-          {/* Filters */}
-          <div style={{ display:"flex", gap:12, marginBottom:20, flexWrap:"wrap", alignItems:"center" }}>
-            <SelectBox value={viewMode} onChange={setViewMode} accent="#E8FF47" options={[
-              {v:"volume",l:"Volume (Units)"},{v:"value",l:"Revenue ($K)"},{v:"margin",l:"Gross Profit ($K)"}
-            ]}/>
-            <SelectBox value={groupBy} onChange={setGroupBy} accent="#47FFD4" options={[
-              {v:"model",l:"By Model"},{v:"category",l:"By Category"}
-            ]}/>
-            <SelectBox value={filterCat} onChange={setFilterCat} accent="#47A3FF" options={[
-              {v:"All",l:"All Categories"}, ...CATEGORIES.map(c=>({v:c,l:c}))
-            ]}/>
-            <SelectBox value={filterStage} onChange={setFilterStage} accent="#FF6B47" options={[
-              {v:"All",l:"All Stages"}, ...LIFECYCLE_STAGES.map(s=>({v:s,l:s}))
-            ]}/>
-            <div style={{ marginLeft:"auto", fontSize:12, color:"#555" }}>{filteredProducts.length} models</div>
-          </div>
-
-          {/* Main chart */}
-          <div style={{ background:"#0D0D0D", border:"1px solid #1E1E1E", borderRadius:12, padding:"24px", marginBottom:24 }}>
-            <div style={{ marginBottom:16 }}>
-              <div style={{ fontSize:14, fontWeight:600, color:"#FFF" }}>
-                {viewMode==="volume" ? "Volume — Forecast vs Actuals" : viewMode==="value" ? "Revenue ($K) — Forecast vs Actuals" : "Gross Profit ($K) — Forecast vs Actuals"}
+          {/* ── 1. OVERALL REVENUE ── */}
+          {(() => {
+            const data = MONTHS.map((month, mi) => {
+              let fRev = 0, aRev = 0, hasA = false;
+              products.forEach(p => {
+                const fd = volData[p.id]; if (!fd) return;
+                fRev += (fd.forecast[mi] || 0) * p.asp / 1000;
+                if (fd.actuals[mi] != null) { aRev += fd.actuals[mi] * p.asp / 1000; hasA = true; }
+              });
+              return { month, "Forecast": Math.round(fRev), ...(hasA ? { "Actuals": Math.round(aRev) } : {}) };
+            });
+            return (
+              <div style={{ background:"#0D0D0D", border:"1px solid #1E1E1E", borderRadius:12, padding:24, marginBottom:24 }}>
+                <div style={{ marginBottom:16 }}>
+                  <div style={{ fontSize:15, fontWeight:700, color:"#FFF" }}>Overall Revenue — Forecast vs Actuals</div>
+                  <div style={{ fontSize:12, color:"#888", marginTop:3 }}>Dotted = Forecast · Solid = Actuals · $K · 24-month view</div>
+                </div>
+                <ResponsiveContainer width="100%" height={300}>
+                  <ComposedChart data={data} margin={{ top:4, right:16, bottom:4, left:0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1A1A1A" vertical={false}/>
+                    <XAxis dataKey="month" tick={{ fill:"#888", fontSize:10, fontFamily:"Space Mono" }} tickLine={false} axisLine={{ stroke:"#1E1E1E" }} interval={2}/>
+                    <YAxis tick={{ fill:"#888", fontSize:10 }} tickLine={false} axisLine={false} tickFormatter={v => v>=1000?`${(v/1000).toFixed(0)}M`:`${v}K`}/>
+                    <Tooltip content={<CustomTooltip unit="$"/>}/>
+                    <ReferenceLine x={MONTHS[CURRENT_MONTH_IDX]} stroke="#333" strokeDasharray="4 4" label={{ value:"Today", fill:"#888", fontSize:10 }}/>
+                    <Line type="monotone" dataKey="Forecast" stroke="#E8FF47" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls/>
+                    <Line type="monotone" dataKey="Actuals"  stroke="#E8FF47" strokeWidth={2.5} strokeDasharray="0" dot={false} connectNulls/>
+                  </ComposedChart>
+                </ResponsiveContainer>
               </div>
-              <div style={{ fontSize:12, color:"#555", marginTop:3 }}>Solid = Forecast · Dashed = Actuals · 24-month view</div>
-            </div>
-            <ResponsiveContainer width="100%" height={340}>
-              <ComposedChart data={chartData} margin={{ top:4, right:16, bottom:4, left:0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1A1A1A" vertical={false}/>
-                <XAxis dataKey="month" tick={{ fill:"#555", fontSize:10, fontFamily:"Space Mono" }} tickLine={false} axisLine={{ stroke:"#1E1E1E" }} interval={2}/>
-                <YAxis tick={{ fill:"#555", fontSize:10 }} tickLine={false} axisLine={false} tickFormatter={v => v>=1000 ? `${(v/1000).toFixed(0)}K` : v}/>
-                <Tooltip content={<CustomTooltip unit={viewMode==="volume"?"vol":"$"}/>}/>
-                <ReferenceLine x={MONTHS[CURRENT_MONTH_IDX]} stroke="#333" strokeDasharray="4 4" label={{ value:"Today", fill:"#555", fontSize:10, fontFamily:"Space Mono" }}/>
-                {chartKeys.map(key => {
-                  const isActual = key.endsWith("_A");
-                  return (
-                    <Line key={key} type="monotone" dataKey={key} stroke={getLineColor(key)}
-                      strokeWidth={isActual?2:1.5} strokeDasharray={isActual?"0":"4 3"}
-                      dot={false} connectNulls={false} opacity={isActual?1:0.65}
-                      name={key.replace(/_[FA]$/,"")} legendType="none"/>
-                  );
-                })}
-              </ComposedChart>
-            </ResponsiveContainer>
+            );
+          })()}
+
+          {/* ── 2. CATEGORY REVENUE ── */}
+          <div style={{ marginBottom:8 }}>
+            <div style={{ fontSize:15, fontWeight:700, color:"#FFF", marginBottom:4 }}>Revenue by Category — Forecast vs Actuals</div>
+            <div style={{ fontSize:12, color:"#888", marginBottom:20 }}>Dotted = Forecast · Solid = Actuals · $K</div>
           </div>
+          {CATEGORIES.map(cat => {
+            const catProds = products.filter(p => p.category === cat);
+            if (!catProds.length) return null;
+            const color = CATEGORY_COLORS[cat];
 
-          {/* Bottom row */}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
-            <div style={{ background:"#0D0D0D", border:"1px solid #1E1E1E", borderRadius:12, padding:"22px" }}>
-              <div style={{ fontSize:13, fontWeight:600, color:"#FFF", marginBottom:4 }}>Category Mix — Forecast Volume</div>
-              <div style={{ fontSize:11, color:"#555", marginBottom:16 }}>Next 12 months cumulative</div>
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={CATEGORIES.map(cat => {
-                  const vol = filteredProducts.filter(p => p.category===cat).reduce((s,p) => {
-                    const fd = volData[p.id]; return fd ? s + fd.forecast.slice(0,12).reduce((a,b)=>a+b,0) : s;
-                  },0);
-                  return { cat: cat.split(" ")[0], vol };
-                })} margin={{ top:4, right:8, bottom:4, left:0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1A1A1A" vertical={false}/>
-                  <XAxis dataKey="cat" tick={{ fill:"#555", fontSize:10 }} tickLine={false} axisLine={false}/>
-                  <YAxis tick={{ fill:"#555", fontSize:10 }} tickLine={false} axisLine={false} tickFormatter={v=>v>=1000?`${(v/1000).toFixed(0)}K`:v}/>
-                  <Tooltip content={<CustomTooltip unit="vol"/>}/>
-                  <Bar dataKey="vol" name="Volume" radius={[4,4,0,0]} fill="#E8FF47"/>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            // Overall data
+            const overallData = MONTHS.map((month, mi) => {
+              let fRev = 0, aRev = 0, hasA = false;
+              catProds.forEach(p => {
+                const fd = volData[p.id]; if (!fd) return;
+                fRev += (fd.forecast[mi] || 0) * p.asp / 1000;
+                if (fd.actuals[mi] != null) { aRev += fd.actuals[mi] * p.asp / 1000; hasA = true; }
+              });
+              return { month, "Forecast": Math.round(fRev), ...(hasA ? { "Actuals": Math.round(aRev) } : {}) };
+            });
 
-            <div style={{ background:"#0D0D0D", border:"1px solid #1E1E1E", borderRadius:12, padding:"22px" }}>
-              <div style={{ fontSize:13, fontWeight:600, color:"#FFF", marginBottom:4 }}>Margin by Model</div>
-              <div style={{ fontSize:11, color:"#555", marginBottom:16 }}>Gross margin % — current pricing</div>
-              <div style={{ overflowY:"auto", maxHeight:200 }}>
-                {[...filteredProducts].sort((a,b)=>{
-                  const ma = a.asp>0?(a.asp-a.bom)/a.asp*100:0, mb = b.asp>0?(b.asp-b.bom)/b.asp*100:0;
-                  return mb-ma;
-                }).map(p => {
-                  const mg = p.asp>0 ? Math.round((p.asp-p.bom)/p.asp*100) : 0;
-                  return (
-                    <div key={p.id} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
-                      <div style={{ width:90, fontSize:11, color:"#AAA", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{p.name}</div>
-                      <div style={{ flex:1, height:6, background:"#1A1A1A", borderRadius:3, overflow:"hidden" }}>
-                        <div style={{ width:`${Math.min(mg,100)}%`, height:"100%", background:CATEGORY_COLORS[p.category], borderRadius:3, transition:"width 0.6s" }}/>
-                      </div>
-                      <div style={{ width:36, fontSize:11, color:"#DDD", textAlign:"right", fontFamily:"'Space Mono',monospace" }}>{mg}%</div>
+            // Per-product data
+            const prodData = MONTHS.map((month, mi) => {
+              const row = { month };
+              catProds.forEach(p => {
+                const fd = volData[p.id]; if (!fd) return;
+                row[`${p.name}_F`] = Math.round((fd.forecast[mi] || 0) * p.asp / 1000);
+                if (fd.actuals[mi] != null) row[`${p.name}_A`] = Math.round(fd.actuals[mi] * p.asp / 1000);
+              });
+              return row;
+            });
+
+            const lineColors = ["#FFF","#AAA","#777","#E8FF47","#47FFD4","#FF6B47","#B847FF","#47A3FF"];
+
+            return (
+              <div key={cat} style={{ marginBottom:28 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }}>
+                  <div style={{ width:10, height:10, borderRadius:2, background:color }}/>
+                  <div style={{ fontSize:13, fontWeight:600, color, textTransform:"uppercase", letterSpacing:2, fontFamily:"'Space Mono',monospace" }}>{cat}</div>
+                  <div style={{ flex:1, height:1, background:"#1A1A1A" }}/>
+                  <div style={{ fontSize:11, color:"#888" }}>{catProds.length} models</div>
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+                  {/* Overall */}
+                  <div style={{ background:"#0D0D0D", border:"1px solid #1E1E1E", borderRadius:10, padding:20 }}>
+                    <div style={{ fontSize:12, fontWeight:600, color:"#CCC", marginBottom:14 }}>Overall</div>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <ComposedChart data={overallData} margin={{ top:4, right:8, bottom:4, left:0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1A1A1A" vertical={false}/>
+                        <XAxis dataKey="month" tick={{ fill:"#888", fontSize:9, fontFamily:"Space Mono" }} tickLine={false} axisLine={false} interval={3}/>
+                        <YAxis tick={{ fill:"#888", fontSize:9 }} tickLine={false} axisLine={false} tickFormatter={v => v>=1000?`${(v/1000).toFixed(0)}M`:`${v}K`}/>
+                        <Tooltip content={<CustomTooltip unit="$"/>}/>
+                        <ReferenceLine x={MONTHS[CURRENT_MONTH_IDX]} stroke="#333" strokeDasharray="4 4"/>
+                        <Line type="monotone" dataKey="Forecast" stroke={color} strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls/>
+                        <Line type="monotone" dataKey="Actuals"  stroke={color} strokeWidth={2.5} dot={false} connectNulls/>
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                  {/* By product */}
+                  <div style={{ background:"#0D0D0D", border:"1px solid #1E1E1E", borderRadius:10, padding:20 }}>
+                    <div style={{ fontSize:12, fontWeight:600, color:"#CCC", marginBottom:14 }}>By Model</div>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <ComposedChart data={prodData} margin={{ top:4, right:8, bottom:4, left:0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1A1A1A" vertical={false}/>
+                        <XAxis dataKey="month" tick={{ fill:"#888", fontSize:9, fontFamily:"Space Mono" }} tickLine={false} axisLine={false} interval={3}/>
+                        <YAxis tick={{ fill:"#888", fontSize:9 }} tickLine={false} axisLine={false} tickFormatter={v => v>=1000?`${(v/1000).toFixed(0)}M`:`${v}K`}/>
+                        <Tooltip content={<CustomTooltip unit="$"/>}/>
+                        <ReferenceLine x={MONTHS[CURRENT_MONTH_IDX]} stroke="#333" strokeDasharray="4 4"/>
+                        {catProds.map((p, pi) => [
+                          <Line key={`${p.name}_F`} type="monotone" dataKey={`${p.name}_F`} stroke={lineColors[pi % lineColors.length]} strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls name={p.name} legendType="none"/>,
+                          <Line key={`${p.name}_A`} type="monotone" dataKey={`${p.name}_A`} stroke={lineColors[pi % lineColors.length]} strokeWidth={2.5} dot={false} connectNulls name={p.name} legendType="none"/>,
+                        ])}
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                    {/* Mini legend */}
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:"6px 14px", marginTop:10 }}>
+                      {catProds.map((p, pi) => (
+                        <div key={p.id} style={{ display:"flex", alignItems:"center", gap:5 }}>
+                          <div style={{ width:16, height:2, background:lineColors[pi % lineColors.length], borderRadius:1 }}/>
+                          <span style={{ fontSize:10, color:"#888" }}>{p.name}</span>
+                        </div>
+                      ))}
                     </div>
-                  );
-                })}
+                  </div>
+                </div>
               </div>
+            );
+          })}
+
+          {/* ── 3. CATEGORY VOLUME ── */}
+          <div style={{ marginBottom:8, marginTop:16 }}>
+            <div style={{ fontSize:15, fontWeight:700, color:"#FFF", marginBottom:4 }}>Volume by Category — Forecast vs Actuals</div>
+            <div style={{ fontSize:12, color:"#888", marginBottom:20 }}>Dotted = Forecast · Solid = Actuals · Units</div>
+          </div>
+          {CATEGORIES.map(cat => {
+            const catProds = products.filter(p => p.category === cat);
+            if (!catProds.length) return null;
+            const color = CATEGORY_COLORS[cat];
+
+            const overallData = MONTHS.map((month, mi) => {
+              let fVol = 0, aVol = 0, hasA = false;
+              catProds.forEach(p => {
+                const fd = volData[p.id]; if (!fd) return;
+                fVol += fd.forecast[mi] || 0;
+                if (fd.actuals[mi] != null) { aVol += fd.actuals[mi]; hasA = true; }
+              });
+              return { month, "Forecast": fVol, ...(hasA ? { "Actuals": aVol } : {}) };
+            });
+
+            const prodData = MONTHS.map((month, mi) => {
+              const row = { month };
+              catProds.forEach(p => {
+                const fd = volData[p.id]; if (!fd) return;
+                row[`${p.name}_F`] = fd.forecast[mi] || 0;
+                if (fd.actuals[mi] != null) row[`${p.name}_A`] = fd.actuals[mi];
+              });
+              return row;
+            });
+
+            const lineColors = ["#FFF","#AAA","#777","#E8FF47","#47FFD4","#FF6B47","#B847FF","#47A3FF"];
+
+            return (
+              <div key={cat} style={{ marginBottom:28 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }}>
+                  <div style={{ width:10, height:10, borderRadius:2, background:color }}/>
+                  <div style={{ fontSize:13, fontWeight:600, color, textTransform:"uppercase", letterSpacing:2, fontFamily:"'Space Mono',monospace" }}>{cat}</div>
+                  <div style={{ flex:1, height:1, background:"#1A1A1A" }}/>
+                  <div style={{ fontSize:11, color:"#888" }}>{catProds.length} models</div>
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+                  <div style={{ background:"#0D0D0D", border:"1px solid #1E1E1E", borderRadius:10, padding:20 }}>
+                    <div style={{ fontSize:12, fontWeight:600, color:"#CCC", marginBottom:14 }}>Overall</div>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <ComposedChart data={overallData} margin={{ top:4, right:8, bottom:4, left:0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1A1A1A" vertical={false}/>
+                        <XAxis dataKey="month" tick={{ fill:"#888", fontSize:9, fontFamily:"Space Mono" }} tickLine={false} axisLine={false} interval={3}/>
+                        <YAxis tick={{ fill:"#888", fontSize:9 }} tickLine={false} axisLine={false} tickFormatter={v => v>=1000?`${(v/1000).toFixed(0)}K`:v}/>
+                        <Tooltip content={<CustomTooltip unit="vol"/>}/>
+                        <ReferenceLine x={MONTHS[CURRENT_MONTH_IDX]} stroke="#333" strokeDasharray="4 4"/>
+                        <Line type="monotone" dataKey="Forecast" stroke={color} strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls/>
+                        <Line type="monotone" dataKey="Actuals"  stroke={color} strokeWidth={2.5} dot={false} connectNulls/>
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div style={{ background:"#0D0D0D", border:"1px solid #1E1E1E", borderRadius:10, padding:20 }}>
+                    <div style={{ fontSize:12, fontWeight:600, color:"#CCC", marginBottom:14 }}>By Model</div>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <ComposedChart data={prodData} margin={{ top:4, right:8, bottom:4, left:0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1A1A1A" vertical={false}/>
+                        <XAxis dataKey="month" tick={{ fill:"#888", fontSize:9, fontFamily:"Space Mono" }} tickLine={false} axisLine={false} interval={3}/>
+                        <YAxis tick={{ fill:"#888", fontSize:9 }} tickLine={false} axisLine={false} tickFormatter={v => v>=1000?`${(v/1000).toFixed(0)}K`:v}/>
+                        <Tooltip content={<CustomTooltip unit="vol"/>}/>
+                        <ReferenceLine x={MONTHS[CURRENT_MONTH_IDX]} stroke="#333" strokeDasharray="4 4"/>
+                        {catProds.map((p, pi) => [
+                          <Line key={`${p.name}_F`} type="monotone" dataKey={`${p.name}_F`} stroke={lineColors[pi % lineColors.length]} strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls name={p.name} legendType="none"/>,
+                          <Line key={`${p.name}_A`} type="monotone" dataKey={`${p.name}_A`} stroke={lineColors[pi % lineColors.length]} strokeWidth={2.5} dot={false} connectNulls name={p.name} legendType="none"/>,
+                        ])}
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:"6px 14px", marginTop:10 }}>
+                      {catProds.map((p, pi) => (
+                        <div key={p.id} style={{ display:"flex", alignItems:"center", gap:5 }}>
+                          <div style={{ width:16, height:2, background:lineColors[pi % lineColors.length], borderRadius:1 }}/>
+                          <span style={{ fontSize:10, color:"#888" }}>{p.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* ── 4. CUSTOM MODEL SELECTOR CHARTS ── */}
+          <div style={{ marginTop:16, marginBottom:16 }}>
+            <div style={{ fontSize:15, fontWeight:700, color:"#FFF", marginBottom:4 }}>Custom Model Comparison</div>
+            <div style={{ fontSize:12, color:"#888", marginBottom:16 }}>Select models to compare · Dotted = Forecast · Solid = Actuals</div>
+            {/* Model multi-select pills */}
+            <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:20 }}>
+              {products.map(p => {
+                const sel = chartSelectedModels.has(p.id);
+                const color = CATEGORY_COLORS[p.category];
+                return (
+                  <button key={p.id} onClick={() => setChartSelectedModels(prev => {
+                    const s = new Set(prev); s.has(p.id) ? s.delete(p.id) : s.add(p.id); return s;
+                  })} style={{ ...btnReset, padding:"5px 12px", borderRadius:20, fontSize:11, fontWeight:500, cursor:"pointer", transition:"all 0.15s",
+                    background: sel ? `${color}22` : "#111",
+                    border: `1px solid ${sel ? color : "#2A2A2A"}`,
+                    color: sel ? color : "#666" }}>
+                    {p.name}
+                  </button>
+                );
+              })}
+              <button onClick={() => setChartSelectedModels(new Set(products.map(p=>p.id)))}
+                style={{ ...btnReset, padding:"5px 12px", borderRadius:20, fontSize:11, color:"#888", border:"1px solid #222", cursor:"pointer" }}>All</button>
+              <button onClick={() => setChartSelectedModels(new Set())}
+                style={{ ...btnReset, padding:"5px 12px", borderRadius:20, fontSize:11, color:"#888", border:"1px solid #222", cursor:"pointer" }}>None</button>
             </div>
           </div>
+
+          {(() => {
+            const selProds = products.filter(p => chartSelectedModels.has(p.id));
+            const lineColors = ["#E8FF47","#47FFD4","#FF6B47","#B847FF","#47A3FF","#FF47A3","#FFF","#AAA","#10B981","#F59E0B","#EF4444","#3B82F6"];
+
+            const volData2 = MONTHS.map((month, mi) => {
+              const row = { month };
+              selProds.forEach(p => {
+                const fd = volData[p.id]; if (!fd) return;
+                row[`${p.name}_F`] = fd.forecast[mi] || 0;
+                if (fd.actuals[mi] != null) row[`${p.name}_A`] = fd.actuals[mi];
+              });
+              return row;
+            });
+
+            const revData = MONTHS.map((month, mi) => {
+              const row = { month };
+              selProds.forEach(p => {
+                const fd = volData[p.id]; if (!fd) return;
+                row[`${p.name}_F`] = Math.round((fd.forecast[mi] || 0) * p.asp / 1000);
+                if (fd.actuals[mi] != null) row[`${p.name}_A`] = Math.round(fd.actuals[mi] * p.asp / 1000);
+              });
+              return row;
+            });
+
+            const ChartBlock = ({ title, data, unit }) => (
+              <div style={{ background:"#0D0D0D", border:"1px solid #1E1E1E", borderRadius:12, padding:24, flex:1 }}>
+                <div style={{ fontSize:13, fontWeight:600, color:"#FFF", marginBottom:4 }}>{title}</div>
+                <div style={{ fontSize:11, color:"#888", marginBottom:16 }}>{selProds.length} models selected</div>
+                <ResponsiveContainer width="100%" height={280}>
+                  <ComposedChart data={data} margin={{ top:4, right:16, bottom:4, left:0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1A1A1A" vertical={false}/>
+                    <XAxis dataKey="month" tick={{ fill:"#888", fontSize:10, fontFamily:"Space Mono" }} tickLine={false} axisLine={{ stroke:"#1E1E1E" }} interval={2}/>
+                    <YAxis tick={{ fill:"#888", fontSize:10 }} tickLine={false} axisLine={false} tickFormatter={v => v>=1000?`${(v/1000).toFixed(0)}K`:v}/>
+                    <Tooltip content={<CustomTooltip unit={unit}/>}/>
+                    <ReferenceLine x={MONTHS[CURRENT_MONTH_IDX]} stroke="#333" strokeDasharray="4 4"/>
+                    {selProds.map((p, pi) => [
+                      <Line key={`${p.name}_F`} type="monotone" dataKey={`${p.name}_F`} stroke={lineColors[pi % lineColors.length]} strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls name={p.name} legendType="none"/>,
+                      <Line key={`${p.name}_A`} type="monotone" dataKey={`${p.name}_A`} stroke={lineColors[pi % lineColors.length]} strokeWidth={2.5} dot={false} connectNulls name={p.name} legendType="none"/>,
+                    ])}
+                  </ComposedChart>
+                </ResponsiveContainer>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:"6px 16px", marginTop:12 }}>
+                  {selProds.map((p, pi) => (
+                    <div key={p.id} style={{ display:"flex", alignItems:"center", gap:5 }}>
+                      <div style={{ width:16, height:2, background:lineColors[pi % lineColors.length], borderRadius:1 }}/>
+                      <span style={{ fontSize:10, color:"#888" }}>{p.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+
+            return (
+              <div style={{ display:"flex", gap:16, marginBottom:32 }}>
+                <ChartBlock title="Volume — Forecast vs Actuals" data={volData2} unit="vol"/>
+                <ChartBlock title="Revenue ($K) — Forecast vs Actuals" data={revData} unit="$"/>
+              </div>
+            );
+          })()}
+
         </>}
 
         {/* ──────────── PRODUCTS ──────────── */}
@@ -1002,7 +1258,7 @@ export default function App() {
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24 }}>
             <div>
               <div style={{ fontSize:20, fontWeight:700, color:"#FFF" }}>Product Catalogue</div>
-              <div style={{ fontSize:13, color:"#555", marginTop:2 }}>{products.length} models · synced to Supabase</div>
+              <div style={{ fontSize:13, color:"#888", marginTop:2 }}>{products.length} models · synced to Supabase</div>
             </div>
             <button onClick={() => setModal("addProduct")} style={btnStyle("#E8FF47","#080808")}><Icon.Plus/> Add Model</button>
           </div>
@@ -1028,7 +1284,7 @@ export default function App() {
                   <div style={{ width:10, height:10, borderRadius:2, background:CATEGORY_COLORS[cat] }}/>
                   <div style={{ fontSize:13, fontWeight:600, color:CATEGORY_COLORS[cat], textTransform:"uppercase", letterSpacing:2, fontFamily:"'Space Mono',monospace" }}>{cat}</div>
                   <div style={{ flex:1, height:1, background:"#1A1A1A" }}/>
-                  <div style={{ fontSize:11, color:"#555" }}>{catProds.length} models</div>
+                  <div style={{ fontSize:11, color:"#888" }}>{catProds.length} models</div>
                 </div>
                 <div style={{ background:"#0D0D0D", border:"1px solid #1E1E1E", borderRadius:10, overflow:"hidden" }}>
                   <table style={{ width:"100%", borderCollapse:"collapse" }}>
@@ -1097,7 +1353,7 @@ export default function App() {
         {activeTab === "data" && <>
           <div style={{ marginBottom:24 }}>
             <div style={{ fontSize:20, fontWeight:700, color:"#FFF" }}>Volume Data</div>
-            <div style={{ fontSize:13, color:"#555", marginTop:2 }}>Forecast vs Actuals — 24 months · live from Supabase</div>
+            <div style={{ fontSize:13, color:"#888", marginTop:2 }}>Forecast vs Actuals — 24 months · live from Supabase</div>
           </div>
           <div style={{ display:"flex", gap:8, marginBottom:20, flexWrap:"wrap" }}>
             {CATEGORIES.map(cat => (
@@ -1154,7 +1410,7 @@ export default function App() {
                 </tbody>
               </table>
             </div>
-            <div style={{ padding:"10px 14px", borderTop:"1px solid #1A1A1A", display:"flex", gap:16, fontSize:11, color:"#555" }}>
+            <div style={{ padding:"10px 14px", borderTop:"1px solid #1A1A1A", display:"flex", gap:16, fontSize:11, color:"#888" }}>
               <span style={{ color:"#777" }}>F = Forecast</span>
               <span style={{ color:"#47FFD4" }}>A = Actuals</span>
               <span style={{ color:"#10B981" }}>≥100%</span>
@@ -1168,7 +1424,7 @@ export default function App() {
         {activeTab === "upload" && <>
           <div style={{ marginBottom:28 }}>
             <div style={{ fontSize:20, fontWeight:700, color:"#FFF" }}>Data Upload</div>
-            <div style={{ fontSize:13, color:"#555", marginTop:2 }}>All uploads write directly to Supabase — visible to all users instantly</div>
+            <div style={{ fontSize:13, color:"#888", marginTop:2 }}>All uploads write directly to Supabase — visible to all users instantly</div>
           </div>
           <div style={{ display:"grid", gap:12, maxWidth:720 }}>
 
@@ -1176,7 +1432,7 @@ export default function App() {
             <div style={{ border:"1px dashed #333", borderRadius:8, padding:"20px 24px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:16, background:"#0A0A0A" }}>
               <div>
                 <div style={{ color:"#DDD", fontSize:13, fontWeight:600, marginBottom:4 }}>Bulk Product Import</div>
-                <div style={{ color:"#555", fontSize:12 }}>
+                <div style={{ color:"#888", fontSize:12 }}>
                   CSV: name, category, stage, asp, bom &nbsp;·&nbsp;
                   <span style={{ color:"#47A3FF", cursor:"pointer", textDecoration:"underline" }}
                     onClick={() => {
@@ -1229,15 +1485,15 @@ export default function App() {
               ].map(g => (
                 <div key={g.label} style={{ background:"#0A0A0A", borderRadius:8, padding:16, border:"1px solid #1A1A1A" }}>
                   <div style={{ fontSize:12, color:"#AAA", fontWeight:600, marginBottom:8 }}>{g.label}</div>
-                  <div style={{ fontSize:11, color:"#555", marginBottom:8 }}>Columns: <span style={{ color:"#47FFD4", fontFamily:"monospace" }}>{g.cols}</span></div>
+                  <div style={{ fontSize:11, color:"#888", marginBottom:8 }}>Columns: <span style={{ color:"#47FFD4", fontFamily:"monospace" }}>{g.cols}</span></div>
                   <pre style={{ fontSize:11, color:"#666", fontFamily:"monospace", lineHeight:1.8, margin:0 }}>{g.example}</pre>
                 </div>
               ))}
             </div>
-            <div style={{ marginTop:16, fontSize:12, color:"#444", lineHeight:1.8 }}>
-              Valid categories: <span style={{ color:"#555", fontFamily:"monospace" }}>Kickscooters, EV Rideons, Manual Rideons, Tricycles, Baby Walkers, Balance Bikes</span><br/>
-              Valid stages: <span style={{ color:"#555", fontFamily:"monospace" }}>Development, Launch, Growth, Maturity, Decline, Discontinued</span><br/>
-              Month format: <span style={{ color:"#555", fontFamily:"monospace" }}>Jul 2025</span> · Model names in forecasts/actuals must exactly match the catalogue
+            <div style={{ marginTop:16, fontSize:12, color:"#777", lineHeight:1.8 }}>
+              Valid categories: <span style={{ color:"#888", fontFamily:"monospace" }}>Kickscooters, EV Rideons, Manual Rideons, Tricycles, Baby Walkers, Balance Bikes</span><br/>
+              Valid stages: <span style={{ color:"#888", fontFamily:"monospace" }}>Development, Launch, Growth, Maturity, Decline, Discontinued</span><br/>
+              Month format: <span style={{ color:"#888", fontFamily:"monospace" }}>Jul 2025</span> · Model names in forecasts/actuals must exactly match the catalogue
             </div>
           </div>
         </>}
@@ -1250,7 +1506,7 @@ export default function App() {
           <div style={{ background:"#0D0D0D", border:"1px solid #2A2A2A", borderRadius:14, padding:28, width:420, maxWidth:"90vw" }} onClick={e => e.stopPropagation()}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:22 }}>
               <div style={{ fontSize:16, fontWeight:700, color:"#FFF" }}>Add New Model</div>
-              <button onClick={() => setModal(null)} style={{ ...btnReset, color:"#555", cursor:"pointer", padding:4 }}><Icon.X/></button>
+              <button onClick={() => setModal(null)} style={{ ...btnReset, color:"#888", cursor:"pointer", padding:4 }}><Icon.X/></button>
             </div>
             <div style={{ display:"grid", gap:14 }}>
               <FormField label="Model Name">
@@ -1261,7 +1517,7 @@ export default function App() {
                   <select value={newProd.category} onChange={e=>setNewProd(p=>({...p,category:e.target.value}))} style={{ ...inputStyle, paddingRight:28 }}>
                     {CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
                   </select>
-                  <div style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", pointerEvents:"none", color:"#555" }}><Icon.ChevronDown/></div>
+                  <div style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", pointerEvents:"none", color:"#888" }}><Icon.ChevronDown/></div>
                 </div>
               </FormField>
               <FormField label="Lifecycle Stage">
@@ -1269,7 +1525,7 @@ export default function App() {
                   <select value={newProd.stage} onChange={e=>setNewProd(p=>({...p,stage:e.target.value}))} style={{ ...inputStyle, paddingRight:28 }}>
                     {LIFECYCLE_STAGES.map(s=><option key={s} value={s}>{s}</option>)}
                   </select>
-                  <div style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", pointerEvents:"none", color:"#555" }}><Icon.ChevronDown/></div>
+                  <div style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", pointerEvents:"none", color:"#888" }}><Icon.ChevronDown/></div>
                 </div>
               </FormField>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
